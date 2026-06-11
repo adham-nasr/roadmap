@@ -1,98 +1,187 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+﻿# Roadmap Backend Service
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+A simple NestJS-based roadmap API built with MongoDB and Mongoose. The service manages roadmaps, topics, and resources, and exposes REST endpoints for the frontend to consume.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Overview
 
-## Description
+This backend provides core entities for a roadmap visualization and learning tracker:
+- `Roadmap`
+- `Topic`
+- `Resource`
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+The application uses MongoDB at `mongodb://localhost/roadmap` by default.
 
-## Project setup
+> Note: The ERD also includes a `UserProfile` entity, but the current implementation exposes only `Roadmap`, `Topic`, and `Resource` APIs.
+
+## Architecture
+
+- NestJS application
+- MongoDB + Mongoose for persistence
+- Modules:
+  - `RoadmapModule`
+  - `TopicModule`
+  - `ResourceModule`
+
+## Data Model
+
+### Roadmap
+- `id` (string)
+- `name` (string)
+- `description` (string)
+
+### Topic
+- `id` (string)
+- `repoTopicid` (string)
+- `name` (string)
+- `description` (string)
+- `type` (string)
+- `x_axis` (number)
+- `y_axis` (number)
+- `roadmap_id` (string) — relation to `Roadmap`
+- `parent_topic_id` (string) — self-referencing topic parent
+
+### Resource
+- `id` (string)
+- `link` (string)
+- `type` (string)
+- `topic_id` (string) — relation to `Topic`
+
+### Relationships
+
+- A `Roadmap` has many `Topic` records.
+- A `Topic` can belong to one `Roadmap`.
+- A `Topic` may have many child `Topic` entries via `parent_topic_id`.
+- A `Topic` has many `Resource` records.
+- A `Resource` belongs to one `Topic`.
+
+## API Endpoints
+
+Base URL: `http://localhost:3000`
+
+### Roadmaps
+
+- `POST /roadmaps`
+  - Create a roadmap.
+  - Body example:
+    ```json
+    {
+      "name": "Frontend Roadmap",
+      "description": "A path for learning UI and state management"
+    }
+    ```
+
+- `GET /roadmaps`
+  - Returns all roadmaps.
+
+- `GET /roadmaps/:id`
+  - Returns a roadmap by ID.
+
+- `PATCH /roadmaps/:id`
+  - Update roadmap fields.
+  - Body example:
+    ```json
+    {
+      "description": "Updated roadmap description"
+    }
+    ```
+
+- `DELETE /roadmaps/:id`
+  - Delete a roadmap.
+
+- `GET /roadmaps/:id/topics`
+  - Returns all topics for the selected roadmap.
+
+### Topics
+
+- `POST /topics`
+  - Create a topic.
+  - Body example:
+    ```json
+    {
+      "name": "React Basics",
+      "description": "Learn components and hooks",
+      "type": "frontend",
+      "x_axis": 120,
+      "y_axis": 80,
+      "repoTopicid": "react-basics",
+      "roadmap_id": "648c5f4a2f4f9d0012345678",
+      "parent_topic_id": null
+    }
+    ```
+
+- `GET /topics`
+  - Returns all topics.
+
+- `GET /topics/:id`
+  - Returns a topic by ID.
+
+- `PATCH /topics/:id`
+  - Update topic fields.
+  - Body example:
+    ```json
+    {
+      "name": "Advanced React",
+      "x_axis": 220
+    }
+    ```
+
+- `DELETE /topics/:id`
+  - Delete a topic.
+
+- `GET /topics/:id/resources`
+  - Returns all resources attached to a topic.
+
+### Resources
+
+- `POST /resources`
+  - Create a resource.
+  - Body example:
+    ```json
+    {
+      "link": "https://example.com/article",
+      "type": "article",
+      "topic_id": "648c5f4a2f4f9d0012345679"
+    }
+    ```
+
+- `GET /resources`
+  - Returns all resources.
+
+- `GET /resources/:id`
+  - Returns a resource by ID.
+
+- `PATCH /resources/:id`
+  - Update resource fields.
+  - Body example:
+    ```json
+    {
+      "type": "video"
+    }
+    ```
+
+- `DELETE /resources/:id`
+  - Delete a resource.
+
+## Frontend Integration Notes
+
+- Use `roadmap_id` when creating or filtering topics by roadmap.
+- Use `topic_id` when creating resources or grouping resources for a topic.
+- Use `parent_topic_id` to build nested topic trees or hierarchical relationships.
+- `repoTopicid` can be used as a stable external topic identifier for UI state or repository mapping.
+- The service currently does not expose authentication or user profile endpoints.
+
+## Running the Project
 
 ```bash
-$ npm install
+cd roadmap
+npm install
+npm run start:dev
 ```
 
-## Compile and run the project
+The server starts on port `3000` by default.
 
-```bash
-# development
-$ npm run start
+## Notes
 
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
-```
-
-## Run tests
-
-```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
-```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+- MongoDB must be running locally for the service to connect successfully.
+- The source is in `src/` and includes three main modules: `roadmap`, `topic`, and `resource`.
+- The ERD in `diagrams/roadmapErd.png` shows the expected model relationships.
