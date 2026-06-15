@@ -14,13 +14,14 @@ export class TopicController {
   // }
 
   @Get()
-  async findAll() {
-    return this.topicService.findAll();
+  async findAll(){
+    const res = await this.topicService.findAll();
+    return res as unknown as ResponseTopicDto[]
   }
 
   @Get(':id')
   async findOne(@Param('id') id: string) {
-    return this.topicService.findOne(id);
+    return await this.topicService.findOne(id) as unknown as ResponseTopicDto
   }
 
   // @Patch(':id')
