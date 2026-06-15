@@ -1,7 +1,10 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
 import { TopicService } from './topic.service';
+import { responseSerializer } from 'src/common/customDecorators/serializer.response';
+import { ResponseTopicDto } from './dto/topic_response.dto';
 
 @Controller('topics')
+@responseSerializer(ResponseTopicDto)
 export class TopicController {
   constructor(private readonly topicService: TopicService) {}
 

@@ -18,8 +18,8 @@ export const ResourcesSchema = SchemaFactory.createForClass(Resources);
 
 @Schema({_id:false})
 export class ChildTopic{
-    @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'Topic' })
-    targetId: string | mongoose.Types.ObjectId
+    @Prop()
+    targetId: string
 
     @Prop({required:true})
     relation:string
@@ -55,10 +55,10 @@ export class Topic{
     
 
     @Prop({ type:[ChildTopicSchema] })
-    ChildTopics: ChildTopic[]
+    childTopics: ChildTopic[]
 
     @Prop({type:[ResourcesSchema]})
-    Resources: Resources[]
+    resources: Resources[]
 
 }
 

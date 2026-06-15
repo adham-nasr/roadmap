@@ -1,6 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { CreateRoadmapDto } from './dto/create-roadmap.dto';
-import { UpdateRoadmapDto } from './dto/update-roadmap.dto';
 import { InjectModel } from '@nestjs/mongoose';
 import { Roadmap, RoadmapDocument } from './roadmap.schema';
 import { Model } from 'mongoose';
@@ -14,9 +12,9 @@ export class RoadmapService {
   constructor(private readonly roadmapRepo:RoadmapRepository,
     private readonly topicRepo:TopicRepository
   ){}
-  create(createRoadmapDto: CreateRoadmapDto) {
-    return 'This action adds a new roadmap';
-  }
+  // create(createRoadmapDto: CreateRoadmapDto) {
+  //   return 'This action adds a new roadmap';
+  // }
 
   async findAll() {
     return await this.roadmapRepo.findAll()
