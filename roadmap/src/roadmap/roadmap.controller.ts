@@ -14,16 +14,18 @@ export class RoadmapController {
   //   return this.roadmapService.create(createRoadmapDto);
   // }
 
-  @responseSerializer(ResponseRoadmapDto)
   @Get()
-  findAll() {
-    return this.roadmapService.findAll();
-  }
+@responseSerializer(ResponseRoadmapDto)
+async findAll(): Promise<ResponseRoadmapDto[]> {
+  const docs = await this.roadmapService.findAll();
+  return docs as unknown as ResponseRoadmapDto[];
+}
+
   
   @responseSerializer(ResponseRoadmapDto)
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.roadmapService.findOne(id);
+  async findOne(@Param('id') id: string) {
+    return await this.roadmapService.findOne(id) as unknown as ResponseRoadmapDto;
   }
 
   // @Patch(':id')
@@ -40,6 +42,6 @@ export class RoadmapController {
   @responseSerializer(ResponseTopicDto)
   @Get(':id/topics')
   async findTopicsByRoadmap(@Param('id') id:string){
-    return await this.roadmapService.findTopicsByRoadmap(id);
+    return await this.roadmapService.findTopicsByRoadmap(id)  as unknown as ResponseTopicDto[];
   }
 }
