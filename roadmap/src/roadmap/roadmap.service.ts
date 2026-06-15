@@ -8,16 +8,16 @@ import { TopicRepository } from 'src/topic/topic.repository';
 
 @Injectable()
 export class RoadmapService {
-  
-  constructor(private readonly roadmapRepo:RoadmapRepository,
-    private readonly topicRepo:TopicRepository
-  ){}
+  constructor(
+    private readonly roadmapRepo: RoadmapRepository,
+    private readonly topicRepo: TopicRepository,
+  ) {}
   // create(createRoadmapDto: CreateRoadmapDto) {
   //   return 'This action adds a new roadmap';
   // }
 
   async findAll() {
-    return await this.roadmapRepo.findAll()
+    return await this.roadmapRepo.findAll();
   }
 
   async findOne(id: string) {
@@ -32,7 +32,7 @@ export class RoadmapService {
   //   return await this.roadmapModel.deleteOne({_id:id});
   // }
 
-  async findTopicsByRoadmap(roadmap_id:string){
+  async findTopicsByRoadmap(roadmap_id: string) {
     return await this.topicRepo.findByRoadmap(roadmap_id);
   }
 }

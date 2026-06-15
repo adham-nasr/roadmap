@@ -1,17 +1,14 @@
-import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
-import { HydratedDocument } from "mongoose";
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { HydratedDocument } from 'mongoose';
 
-
-
-@Schema({'collection':'Roadmap'})
-export class Roadmap{
-
-    @Prop({required:true})
-    name:string;
-    @Prop()
-    description:string;
+@Schema({ collection: 'roadmaps' })
+export class Roadmap {
+  @Prop({ required: true })
+  name: string;
+  @Prop()
+  description?: string;
 }
 
-export type RoadmapDocument = HydratedDocument<Roadmap>
+export type RoadmapDocument = HydratedDocument<Roadmap>;
 
-export const roadmapSchema = SchemaFactory.createForClass(Roadmap)
+export const roadmapSchema = SchemaFactory.createForClass(Roadmap);
