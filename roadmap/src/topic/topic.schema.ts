@@ -18,7 +18,7 @@ export const ResourcesSchema = SchemaFactory.createForClass(Resources);
 
 @Schema({_id:false})
 export class ChildTopic{
-    @Prop()
+    @Prop({required:true})
     targetId: string
 
     @Prop({required:true})
@@ -32,13 +32,13 @@ export const ChildTopicSchema = SchemaFactory.createForClass(ChildTopic);
 @Schema({'collection':'Topic'})
 export class Topic{
 
-    @Prop()
+    @Prop({required:true})
     name:string;
 
     @Prop()
     description:string;
 
-    @Prop({type:String})
+    @Prop({type:String , required:true})
     type:string
 
     @Prop({type:Object})
@@ -50,7 +50,8 @@ export class Topic{
     @Prop()
     repoTopicid:string; /// Sure ?
     
-    @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'Roadmap' })
+
+    @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'Roadmap' , required:true , index:true})
     roadmap_id: string | mongoose.Types.ObjectId;
     
 
