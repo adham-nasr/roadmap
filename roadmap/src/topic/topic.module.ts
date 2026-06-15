@@ -3,14 +3,13 @@ import { TopicService } from './topic.service';
 import { TopicController } from './topic.controller';
 import { MongooseModule } from '@nestjs/mongoose';
 import { Topic, topicSchema } from './topic.schema';
-import { ResourceModule } from 'src/resource/resource.module';
+import { TopicRepository } from './topic.repository';
 
 @Module({
-  imports:[MongooseModule.forFeature([{name:Topic.name,schema:topicSchema}]) ,
-          ResourceModule
+  imports:[MongooseModule.forFeature([{name:Topic.name,schema:topicSchema}]) 
   ],
   controllers: [TopicController],
-  providers: [TopicService],
-  exports: [MongooseModule]
+  providers: [TopicService,TopicRepository],
+  exports: [MongooseModule,TopicRepository]
 })
 export class TopicModule {}

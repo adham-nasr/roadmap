@@ -6,7 +6,7 @@ import { HydratedDocument } from "mongoose";
 @Schema({'collection':'Roadmap'})
 export class Roadmap{
 
-    @Prop()
+    @Prop({required:true})
     name:string;
     @Prop()
     description:string;
