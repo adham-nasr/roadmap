@@ -7,7 +7,9 @@ import { MongooseModule } from '@nestjs/mongoose';
 
 @Module({
   imports: [
-    MongooseModule.forRoot('mongodb://localhost:27017/roadmapsdb'),
+    MongooseModule.forRoot(
+      'mongodb+srv://ITI-FinalProject:ITI-PROJECT-123@cluster0.1rl7if2.mongodb.net/',
+    ),
     RoadmapModule,
     TopicModule,
   ],
