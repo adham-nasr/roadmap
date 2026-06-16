@@ -8,9 +8,10 @@ import { RoadmapRepository } from './roadmap.repository';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{name:Roadmap.name,schema:roadmapSchema}]),
-    TopicModule],
+    MongooseModule.forFeature([{ name: Roadmap.name, schema: roadmapSchema }]),
+    TopicModule,
+  ],
   controllers: [RoadmapController],
-  providers: [RoadmapService,RoadmapRepository],
+  providers: [RoadmapService, RoadmapRepository],
 })
 export class RoadmapModule {}

@@ -1,68 +1,66 @@
-import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
-import mongoose, { HydratedDocument } from "mongoose";
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import mongoose, { HydratedDocument } from 'mongoose';
 
-@Schema({_id:false})
-export class Resources{
-    @Prop({type: String,required:true})
-    type:string
+@Schema({ _id: false })
+export class Resources {
+  @Prop({ type: String, required: true })
+  type: string;
 
-    @Prop({required:true})
-    title:string
+  @Prop({ required: true })
+  title: string;
 
-    @Prop({required:true})
-    link:string
+  @Prop({ required: true })
+  link: string;
 }
 
 export const ResourcesSchema = SchemaFactory.createForClass(Resources);
 
+@Schema({ _id: false })
+export class ChildTopic {
+  @Prop({ required: true })
+  targetId: string;
 
-@Schema({_id:false})
-export class ChildTopic{
-    @Prop({required:true})
-    targetId: string
-
-    @Prop({required:true})
-    relation:string
- 
+  @Prop({ required: true })
+  relation: string;
 }
 
 export const ChildTopicSchema = SchemaFactory.createForClass(ChildTopic);
 
+@Schema({ collection: 'topics' })
+export class Topic {
+  @Prop({ required: true })
+  name: string;
 
-@Schema({'collection':'Topic'})
-export class Topic{
+  @Prop()
+  description: string;
 
-    @Prop({required:true})
-    name:string;
+  @Prop({ type: String, required: true })
+  type: string;
 
-    @Prop()
-    description:string;
+  @Prop({ type: Object })
+  position: {
+    x: number;
+    y: number;
+  };
 
-    @Prop({type:String , required:true})
-    type:string
+  @Prop()
+  topicId: string;
 
-    @Prop({type:Object})
-    position:{
-        x:number,
-        y:number
-    }
+  @Prop({
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'roadmaps',
+    required: true,
+    index: true,
+  })
+  roadmapid: string | mongoose.Types.ObjectId;
 
-    @Prop()
-    repoTopicid:string; /// Sure ?
-    
+  @Prop({ type: [ChildTopicSchema] })
+  childTopics: ChildTopic[];
 
-    @Prop({ type: mongoose.Schema.Types.ObjectId, ref: 'Roadmap' , required:true , index:true})
-    roadmap_id: string | mongoose.Types.ObjectId;
-    
-
-    @Prop({ type:[ChildTopicSchema] })
-    childTopics: ChildTopic[]
-
-    @Prop({type:[ResourcesSchema]})
-    resources: Resources[]
-
+  @Prop({ type: [ResourcesSchema] })
+  resources: Resources[];
 }
 
-export type TopicDocument = HydratedDocument<Topic>
+export type TopicDocument = HydratedDocument<Topic>;
 
-export const topicSchema = SchemaFactory.createForClass(Topic) 
+export const topicSchema = SchemaFactory.createForClass(Topic);

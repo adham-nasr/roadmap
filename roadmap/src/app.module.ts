@@ -6,10 +6,15 @@ import { TopicModule } from './topic/topic.module';
 import { MongooseModule } from '@nestjs/mongoose';
 
 @Module({
-  imports: [ MongooseModule.forRoot('mongodb://localhost/roadmap2'),
-  RoadmapModule, TopicModule],
+  imports: [
+    MongooseModule.forRoot(
+      'mongodb+srv://ITI-FinalProject:ITI-PROJECT-123@cluster0.1rl7if2.mongodb.net/roadmapsdb',
+    ),
+    RoadmapModule,
+    TopicModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
-  exports:[MongooseModule]
+  exports: [MongooseModule],
 })
 export class AppModule {}
