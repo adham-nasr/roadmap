@@ -1,0 +1,2 @@
+
+GET http://localhost:4566/_aws/execute-api/<api_id>/Prod/

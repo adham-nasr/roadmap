@@ -1,0 +1,32 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  NEST-APP
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 512
+
+Resources:
+  RoadmapFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: roadmap/
+      Handler: dist/main.handler
+      Runtime: nodejs24.x
+      # Architectures:
+      #   - x86_64
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /{proxy+}   # ✅ Capital 'P'
+            Method: ANY       # ✅ Capital 'M'
+
+Outputs:
+  ApiEndpoint:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+      
