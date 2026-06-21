@@ -27,6 +27,35 @@ Resources:
             Path: /
             Method: ANY
 
+  ExtractFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: extractService
+      Runtime: provided.al2023
+      Handler: bootstrap
+      CodeUri: etl/
+      Timeout: 600
+      Environment:
+        Variables:
+          STATE_BUCKET: !Ref StateBucket
+          RAW_BUCKET: !Ref RawBucket
+          STATE_FILE_KEY: sync/state.json
+          IDS_FILE_KEY: sync/roadmap_ids.json
+    Metadata:
+      BuildMethod: makefile   
+
+  StateBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: state-bucket
+
+  RawBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: raw-bucket
+
 Outputs:
   ApiUrl:
     Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
