@@ -20,12 +20,13 @@ Resources:
           Properties:
             Path: /{proxy+}
             Method: ANY
-
         RootApi:
           Type: Api
           Properties:
             Path: /
             Method: ANY
+      Tracing: Active
+
 
   ExtractFunction:
     Type: AWS::Serverless::Function
@@ -35,14 +36,130 @@ Resources:
       Handler: bootstrap
       CodeUri: etl/
       Timeout: 600
+      Policies:
+        - S3ReadPolicy:
+            BucketName: state-bucket
+        - S3WritePolicy:
+            BucketName: state-bucket
+            
+        - S3ReadPolicy:
+            BucketName: raw-bucket
+        - S3WritePolicy:
+            BucketName: raw-bucket
       Environment:
         Variables:
-          STATE_BUCKET: !Ref StateBucket
-          RAW_BUCKET: !Ref RawBucket
+          # STATE_BUCKET: !Ref StateBucket
+          # RAW_BUCKET: !Ref RawBucket
+          STATE_BUCKET: state-bucket
+          RAW_BUCKET: raw-bucket
           STATE_FILE_KEY: sync/state.json
           IDS_FILE_KEY: sync/roadmap_ids.json
+          GITHUB_OWNER: nilbuild
+          GITHUB_REPO: developer-roadmap
+          GITHUB_BRANCH: master
+          GITHUB_ROADMAPS_PATH: src/data/roadmaps
+          GITHUB_TOKEN: ""
+      Tracing: Active    
+       
     Metadata:
       BuildMethod: makefile   
+
+  TransformFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: transformService
+      Runtime: provided.al2023
+      Handler: bootstrap
+      CodeUri: etl/
+      Timeout: 600
+      Policies:
+        # --- First Bucket Permissions ---
+        - S3ReadPolicy:
+            BucketName: output-bucket
+        - S3WritePolicy:
+            BucketName: output-bucket
+            
+        # --- Second Bucket Permissions ---
+        - S3ReadPolicy:
+            BucketName: raw-bucket
+        - S3WritePolicy:
+            BucketName: raw-bucket
+
+        # --- Second Bucket Permissions ---
+        - S3ReadPolicy:
+            BucketName: state-bucket
+        - S3WritePolicy:
+            BucketName: state-bucket
+      Environment:
+        Variables:
+          STATE_BUCKET: state-bucket
+          OUTPUT_BUCKET: output-bucket
+          STATE_FILE_KEY: sync/state.json
+          IDS_FILE_KEY: sync/roadmap_ids.json
+          ROADMAPS_OUTPUT_KEY: output/roadmaps.json
+          TOPICS_OUTPUT_KEY: output/topics.json
+          GITHUB_OWNER: nilbuild
+          GITHUB_REPO: developer-roadmap
+          GITHUB_BRANCH: master
+          GITHUB_ROADMAPS_PATH: src/data/roadmaps
+          GITHUB_TOKEN: ""
+      Tracing: Active
+
+       
+    Metadata:
+      BuildMethod: makefile   
+
+  LoadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: loadService
+      Runtime: provided.al2023
+      Handler: bootstrap
+      CodeUri: etl/
+      Timeout: 600
+      Policies:
+        - S3ReadPolicy:
+            BucketName: output-bucket
+        - S3WritePolicy:
+            BucketName: output-bucket
+      Environment:
+        Variables:
+          MONGODB_URI: mongodb+srv://adham2042000_db_user:jVe446ugr2gngmKS@cluster0.gho62ke.mongodb.net/?appName=Cluster0
+          MONGODB_DB: roadmapsdb
+      Tracing: Active
+      
+       
+    Metadata:
+      BuildMethod: makefile   
+
+  ETLStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      DefinitionUri: stateMachine/etl.json
+      DefinitionSubstitutions:
+        ExtractFunctionArn: !GetAtt ExtractFunction.Arn
+        TransformFunctionArn: !GetAtt TransformFunction.Arn
+        LoadFunctionArn: !GetAtt LoadFunction.Arn
+      Policies:
+        - LambdaInvokePolicy:
+            FunctionName: !Ref ExtractFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref TransformFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref LoadFunction
+      Events:
+        MyTimer:
+          Type: Schedule
+          Properties:
+            Schedule: "rate(20 minutes)" 
+      Logging:
+        Level: ALL
+        IncludeExecutionData: true
+        Destinations:
+          - CloudWatchLogsLogGroup:
+              LogGroupArn: !GetAtt ETLStateMachineLogGroup.Arn
+      Tracing:
+        Enabled: true
 
   StateBucket:
     Type: AWS::S3::Bucket
@@ -56,8 +173,43 @@ Resources:
     Properties:
       BucketName: raw-bucket
 
+  OutputBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: output-bucket
+
+  ETLStateMachineLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 30
+  
+  NestLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${NestLambdalith}"
+      RetentionInDays: 30
+
+  ExtractFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ExtractFunction}"
+      RetentionInDays: 30
+
+  TransformFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${TransformFunction}"
+      RetentionInDays: 30
+
+  LoadFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${LoadFunction}"
+      RetentionInDays: 30
+
 Outputs:
   ApiUrl:
     Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
   LocalApiUrl:
-    Value: http://localhost:4566/_aws/execute-api/${ServerlessRestApi}/Prod/
+    Value: !Sub "http://localhost:4566/_aws/execute-api/${ServerlessRestApi}/Prod/"

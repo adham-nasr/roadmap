@@ -1,0 +1,5 @@
+{
+  "outputBucket": "output-bucket",
+  "roadmapsKey": "output/roadmaps.json",
+  "topicsKey": "output/topics.json"
+}

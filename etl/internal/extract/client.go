@@ -19,7 +19,7 @@ type Client struct {
 
 func NewClient(owner, repo, branch, token string, timeout time.Duration) *Client {
 	return &Client{
-		httpClient: &http.Client{Timeout: timeout},
+		httpClient: &http.Client{Timeout: time.Duration(timeout) * time.Second},
 		token:      token,
 		owner:      owner,
 		repo:       repo,

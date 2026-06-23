@@ -1,0 +1,29 @@
+{
+    "Comment":"ETL State Machine",
+    "StartAt":"ExtractState",
+    "States":{
+        "ExtractState":{
+            "Type":"Task",
+            "Resource":"${ExtractFunctionArn}",
+            "Next":"TransformState"
+        },
+        "TransformState":{
+            "Type":"Task",
+            "Resource":"${TransformFunctionArn}",
+            "Next":"LoadState"
+        },
+        "LoadState":{
+            "Type":"Task",
+            "Resource":"${LoadFunctionArn}",
+            "Retry": [
+                {
+                "ErrorEquals": ["States.ALL"],
+                "IntervalSeconds": 10,
+                "MaxAttempts": 2,
+                "BackoffRate": 2
+                }
+            ],
+            "End":true
+        }
+    }
+}

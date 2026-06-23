@@ -3,6 +3,7 @@ package extract
 import (
 	"context"
 	"fmt"
+	"log"
 	"path/filepath"
 	"time"
 	"os"
@@ -32,21 +33,29 @@ func SyncRoadmaps(
 		state.Roadmaps = map[string]RoadmapState{}
 	}
 
+	log.Print("fetching tree")
 	// 2. Fetch tree from GitHub
 	tree, err := github.FetchTree(ctx)
 	if err != nil {
+		log.Printf("error fetching tree: %v", err)
 		return nil, err
 	}
 	if tree.Truncated {
+		log.Print("github tree truncated")
 		return nil, fmt.Errorf("github tree truncated")
 	}
+
+
+	log.Print("discovering eligible roadmaps")
 
 	// 3. Discover eligible roadmaps
 	eligible, err := DiscoverEligibleRoadmaps(tree, remoteBase)
 	if err != nil {
+		log.Printf("error discovering eligible roadmaps: %v", err)
 		return nil, err
 	}
 
+	log.Print("determining changed vs skipped")
 	// 4. Determine changed vs skipped
 	var changed []RoadmapRemote
 	var skipped []RoadmapRemote
@@ -59,6 +68,7 @@ func SyncRoadmaps(
 		changed = append(changed, rr)
 	}
 
+	log.Print("downloading changed roadmaps")
 	// 5. Download changed roadmaps to /tmp and upload to S3
 	err = util.RunBounded(changed, workers, func(rr RoadmapRemote) error {
 		// Download to a temporary directory

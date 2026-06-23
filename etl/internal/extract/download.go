@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"log"
 	"path/filepath"
 	"strings"
 )
@@ -15,8 +16,8 @@ func (c *Client) DownloadRoadmapToTemp(ctx context.Context, remoteBase string, r
 	}
 
 	prefix := strings.TrimSuffix(remoteBase, "/") + "/" + rr.Name + "/"
-
-	for _, f := range rr.Files {
+	log.Printf("Downloading roadmap %s with %d files", rr.Name, len(rr.Files))
+	for i, f := range rr.Files {
 		if f.Type != "blob" {
 			continue
 		}
@@ -24,6 +25,9 @@ func (c *Client) DownloadRoadmapToTemp(ctx context.Context, remoteBase string, r
 		if rel == f.Path {
 			continue
 		}
+		if i%10 == 0 {
+            log.Printf("  %s: downloaded %d/%d files", rr.Name, i, len(rr.Files))
+        }
 		url := fmt.Sprintf(
 			"https://raw.githubusercontent.com/%s/%s/%s/%s",
 			c.owner, c.repo, c.branch, f.Path,
@@ -40,5 +44,6 @@ func (c *Client) DownloadRoadmapToTemp(ctx context.Context, remoteBase string, r
 			return err
 		}
 	}
+	log.Printf("Finished downloading roadmap %s", rr.Name)
 	return nil
 }

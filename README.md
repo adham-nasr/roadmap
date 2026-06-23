@@ -1,278 +1,627 @@
-# NestJS Lambdalith on AWS Serverless
+# Roadmaps Platform
 
-A production-ready NestJS application deployed as a single Lambda function (Lambdalith pattern) using AWS SAM, with full local development support via LocalStack.
+A serverless platform for synchronizing, transforming, and serving developer roadmap data.
 
-## 🏗️ Architecture
+The system continuously extracts roadmap definitions from GitHub, transforms them into a normalized domain model, loads them into MongoDB Atlas, and exposes the resulting data through a NestJS API deployed as a Lambda function.
 
-```
-┌─────────────┐
-│   Client    │
-└──────┬──────┘
-       │
-       ▼
-┌─────────────────────────────────────────────┐
-│           Amazon API Gateway                │
-│         (HTTP/ REST API)                    │
-└──────────────────┬──────────────────────────┘
-                   │
-                   ▼
-┌─────────────────────────────────────────────┐
-│         AWS Lambda (NestJS)                 │
-│   ┌─────────────────────────────────┐      │
-│   │    NestJS Application            │      │
-│   │  ├── Controllers                 │      │
-│   │  ├── Services                    │      │
-│   │  ├── Modules                     │      │
-│   │  └── DTOs                        │      │
-│   └─────────────────────────────────┘      │
-└─────────────────────────────────────────────┘
-```
-
-### How It Works
-
-1. **API Gateway** receives all HTTP requests
-2. Routes are proxied to a **single Lambda function**
-3. Lambda executes your **NestJS application**
-4. NestJS handles routing, business logic, and responses
-5. API Gateway returns the response to the client
-
-## 📋 Prerequisites
-
-- [Node.js 22.x](https://nodejs.org/)
-- [AWS CLI](https://aws.amazon.com/cli/)
-- [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html)
-- [Docker](https://www.docker.com/get-started)
-- [LocalStack](https://localstack.cloud/) (optional, for local AWS emulation)
-- [awslocal](https://github.com/localstack/awscli-local) (LocalStack CLI wrapper)
-
-## 🚀 Quick Start
-
-### 1. Clone & Install
-
-```bash
-# Install dependencies
-npm install
-
-# Install SAM CLI (if not installed)
-# macOS
-brew install aws-sam-cli
-
-# Linux
-pip install aws-sam-cli
-
-# Windows
-# Download from: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html
-```
-
-### 2. Build Your NestJS Application
-
-```bash
-# Build the NestJS app
-npm run build
-
-# SAM build
-sam build
-```
-
-### 3. Local Development
-
-#### Option A: SAM Local (Fastest)
-```bash
-# Start API locally
-sam local start-api
-
-# Your API is now available at:
-# http://localhost:3000
-```
-
-#### Option B: LocalStack (Full AWS Emulation)
-```bash
-# Start LocalStack
-docker-compose up -d
-
-# Deploy to LocalStack
-samlocal deploy --guided \
-  --stack-name nest-lambdalith-local \
-  --s3-bucket localstack-bucket \
-  --no-fail-on-empty-changeset
-
-# Your API is available at:
-# http://localhost:4566/_aws/execute-api/{api-id}/Prod/
-```
-
-### 4. Deploy to AWS
-
-```bash
-# Build
-sam build
-
-# Deploy (guided setup)
-sam deploy --guided
-
-# Follow the prompts:
-# - Stack Name: nest-lambdalith
-# - AWS Region: us-east-1 (or your preferred)
-# - Confirm changes: y
-# - Allow SAM to create IAM roles: y
-```
-
-## 📁 Project Structure
-
-```
-├── src/
-│   ├── main.ts              # Application entry point
-│   ├── app.module.ts        # Root module
-│   ├── app.controller.ts    # Root controller
-│   └── app.service.ts       # Root service
-├── dist/                    # Compiled output (generated)
-├── roadmap/                 # SAM deployment source
-├── template.yaml            # SAM infrastructure
-├── package.json
-├── tsconfig.json
-└── README.md
-```
-
-## 🔧 Configuration
-
-### template.yaml Overview
-
-```yaml
-AWSTemplateFormatVersion: '2010-09-09'
-Transform: AWS::Serverless-2016-10-31
-
-Globals:
-  Function:
-    Timeout: 30          # Max execution time
-    MemorySize: 512      # RAM allocation (MB)
-
-Resources:
-  NestLambdalith:
-    Type: AWS::Serverless::Function
-    Properties:
-      Runtime: nodejs22.x
-      Handler: dist/main.handler
-      CodeUri: roadmap/
-      Events:
-        ProxyApi:
-          Type: Api
-          Properties:
-            Path: /{proxy+}    # Catch-all route
-            Method: ANY        # All HTTP methods
-        RootApi:
-          Type: Api
-          Properties:
-            Path: /
-            Method: ANY
-```
-
-
-### API Testing with cURL
-
-```bash
-# Test locally
-curl http://localhost:3000/
-curl http://localhost:3000/users
-
-# Test on AWS
-curl https://{api-id}.execute-api.{region}.amazonaws.com/Prod/
-```
-
-## 📦 Deployment Commands Reference
-
-| Command | Purpose |
-|---------|---------|
-| `sam build` | Build the SAM application |
-| `sam local start-api` | Start local API server |
-| `sam local invoke NestLambdalith` | Invoke function locally |
-| `sam deploy --guided` | Deploy to AWS |
-| `sam logs -n NestLambdalith` | View Lambda logs |
-| `sam delete` | Delete the stack |
-
-## 🔍 Debugging
-
-### Local Debugging
-```bash
-# Run with debug port
-sam local start-api --debug-port 5858
-
-# Attach your IDE to port 5858
-```
-
-### AWS Debugging
-```bash
-# View logs in real-time
-sam logs -n NestLambdalith --tail
-
-# View specific time range
-sam logs -n NestLambdalith --start-time "2024-01-01T00:00:00Z"
-```
-
-
-
-
-## 📊 Monitoring
-
-### AWS Console Access
-- **Lambda**: AWS Console → Lambda → nest-lambdalith
-- **API Gateway**: AWS Console → API Gateway → nest-lambdalith
-- **CloudWatch Logs**: AWS Console → CloudWatch → Log Groups → /aws/lambda/nest-lambdalith
-
-### Metrics to Watch
-- **Lambda**: Duration, Invocations, Errors, Throttles
-- **API Gateway**: 4xx/5xx errors, Latency, Request count
-
-## 🔒 Security Best Practices
-
-1. **Never commit secrets** - Use AWS Secrets Manager or SSM Parameter Store
-2. **Enable API Gateway throttling** - Prevents DDoS
-3. **Use IAM roles** - Principle of least privilege
-4. **Enable logging** - CloudWatch for auditing
-5. **Use environment variables** - For configuration
-
-## 📈 Cost Optimization
-
-| Strategy | Savings |
-|----------|---------|
-| Right-size memory (128MB-512MB) | Up to 75% |
-| Use Provisioned Concurrency | For predictable traffic |
-| Enable caching in API Gateway | Reduces Lambda invocations |
-| Set appropriate timeout | Avoids overpaying |
-
-## 🆚 Lambdalith vs Microservices
-
-| Aspect | Lambdalith (This) | Microservices |
-|--------|-------------------|---------------|
-| **Cost** | ✅ Lower (one function) | ❌ Higher (many functions) |
-| **Cold Start** | ❌ One cold start affects all | ✅ Isolated per service |
-| **Complexity** | ✅ Simpler | ❌ Complex orchestration |
-| **Deployment** | ✅ One deployment | ❌ Multiple deployments |
-| **Scale** | ❌ Scales as one unit | ✅ Granular scaling |
-
-## 📚 Additional Resources
-
-- [NestJS Documentation](https://docs.nestjs.com/)
-- [AWS SAM Documentation](https://docs.aws.amazon.com/serverless-application-model/)
-- [LocalStack Documentation](https://docs.localstack.cloud/)
-- [Serverless-http NPM Package](https://www.npmjs.com/package/serverless-http)
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run tests
-5. Submit a pull request
-
-## 📝 License
-
-MIT
-
-## 🆘 Support
-
-- Open an issue for bugs
-- Discussion for questions
-- Pull requests for improvements
+The project is developed locally using LocalStack while remaining fully compatible with AWS deployment.
 
 ---
 
-**Happy Building! 🚀**
+# Architecture Overview
+
+```mermaid
+flowchart LR
+
+    USER[Client Applications]
+
+    subgraph AWS["AWS / LocalStack"]
+
+        subgraph API["Application Layer"]
+            APIGW[API Gateway]
+            NEST[NestJS Backend Lambda]
+        end
+
+        subgraph ORCH["Workflow Orchestration"]
+            SCHEDULE[EventBridge Schedule]
+            SFN[Step Functions ETL State Machine]
+        end
+
+        subgraph ETL["ETL Services"]
+
+            EXTRACT[Extract Lambda]
+
+            TRANSFORM[Transform Lambda]
+
+            LOAD[Load Lambda]
+
+        end
+
+        subgraph STORAGE["Storage Layer"]
+
+            STATE[(state-bucket)]
+
+            RAW[(raw-bucket)]
+
+            OUTPUT[(output-bucket)]
+
+        end
+    end
+
+    GITHUB[(GitHub Repository)]
+
+    MONGO[(MongoDB Atlas)]
+
+    USER --> APIGW
+    APIGW --> NEST
+
+    NEST --> MONGO
+
+    SCHEDULE --> SFN
+
+    SFN --> EXTRACT
+    SFN --> TRANSFORM
+    SFN --> LOAD
+
+    EXTRACT --> GITHUB
+
+    EXTRACT --> STATE
+    EXTRACT --> RAW
+
+    RAW --> TRANSFORM
+    STATE --> TRANSFORM
+
+    TRANSFORM --> OUTPUT
+
+    OUTPUT --> LOAD
+
+    LOAD --> MONGO
+```
+
+---
+
+# System Components
+
+## NestJS Backend
+
+The API layer is implemented as a NestJS application deployed as a Lambda function.
+
+Responsibilities:
+
+* Expose REST APIs
+* Serve roadmap data
+* Query MongoDB Atlas
+* Provide application-facing endpoints
+
+### Runtime
+
+```text
+API Gateway
+     ↓
+NestJS Lambda
+     ↓
+MongoDB Atlas
+```
+
+---
+
+## ETL Pipeline
+
+The ETL pipeline is responsible for synchronizing roadmap definitions from GitHub and maintaining the MongoDB dataset used by the API.
+
+The workflow is orchestrated by AWS Step Functions.
+
+### Stages
+
+```text
+Extract
+   ↓
+Transform
+   ↓
+Load
+```
+
+---
+
+# ETL Workflow
+
+```mermaid
+flowchart TD
+
+    START([Scheduled Execution])
+
+    EXTRACT[Extract Lambda]
+
+    G1[Fetch GitHub Tree]
+    G2[Detect Changed Roadmaps]
+    G3[Download Changed Files]
+
+    STATE[(state-bucket)]
+    RAW[(raw-bucket)]
+
+    TRANSFORM[Transform Lambda]
+
+    T1[Load Raw Roadmaps]
+    T2[Parse Topics]
+    T3[Build Relationships]
+    T4[Generate Outputs]
+
+    OUTPUT[(output-bucket)]
+
+    LOAD[Load Lambda]
+
+    M1[Ensure Indexes]
+    M2[Upsert Roadmaps]
+    M3[Upsert Topics]
+
+    DB[(MongoDB Atlas)]
+
+    START --> EXTRACT
+
+    EXTRACT --> G1
+    G1 --> G2
+    G2 --> G3
+
+    G2 --> STATE
+    G3 --> RAW
+
+    RAW --> TRANSFORM
+    STATE --> TRANSFORM
+
+    TRANSFORM --> T1
+    T1 --> T2
+    T2 --> T3
+    T3 --> T4
+
+    T4 --> OUTPUT
+
+    OUTPUT --> LOAD
+
+    LOAD --> M1
+    M1 --> M2
+    M2 --> M3
+
+    M3 --> DB
+```
+
+---
+
+# State Machine
+
+The ETL process is orchestrated using AWS Step Functions.
+
+```mermaid
+stateDiagram-v2
+
+    [*] --> Extract
+
+    Extract --> Transform
+
+    Transform --> Load
+
+    Load --> [*]
+```
+
+Current retry strategy:
+
+```yaml
+Retry:
+  ErrorEquals:
+    - States.ALL
+  IntervalSeconds: 10
+  MaxAttempts: 2
+  BackoffRate: 2
+```
+
+---
+
+# Extract Service
+
+The Extract service synchronizes roadmap content from GitHub.
+
+## Responsibilities
+
+* Fetch repository tree
+* Discover eligible roadmaps
+* Detect roadmap changes using fingerprints
+* Download changed roadmap assets
+* Persist synchronization state
+
+## Inputs
+
+```text
+GitHub Repository
+```
+
+## Outputs
+
+```text
+state-bucket
+raw-bucket
+```
+
+## Stored State
+
+```json
+{
+  "roadmaps": {
+    "backend": {
+      "fingerprint": "...",
+      "syncedAt": "..."
+    }
+  }
+}
+```
+
+## Change Detection
+
+Each roadmap is fingerprinted using:
+
+```text
+SHA256(
+    file_path + file_sha
+)
+```
+
+Only changed roadmaps are downloaded.
+
+---
+
+# Transform Service
+
+The Transform service converts raw roadmap assets into a normalized domain model.
+
+## Responsibilities
+
+* Read roadmap definitions
+* Parse topic markdown files
+* Extract resources
+* Build topic relationships
+* Generate output artifacts
+
+## Inputs
+
+```text
+raw-bucket
+state-bucket
+```
+
+## Outputs
+
+```text
+output-bucket
+```
+
+### Generated Files
+
+```text
+output/
+├── roadmaps.json
+└── topics.json
+```
+
+---
+
+# Load Service
+
+The Load service persists transformed data into MongoDB Atlas.
+
+## Responsibilities
+
+* Read transformed outputs
+* Ensure indexes
+* Upsert roadmaps
+* Upsert topics
+
+## Collections
+
+### roadmaps
+
+```json
+{
+  "_id": "...",
+  "name": "backend"
+}
+```
+
+### topics
+
+```json
+{
+  "topicId": "...",
+  "roadmapId": "...",
+  "name": "...",
+  "resources": [],
+  "childTopics": []
+}
+```
+
+---
+
+# Storage Architecture
+
+## state-bucket
+
+Stores synchronization metadata.
+
+```text
+sync/
+├── state.json
+└── roadmap_ids.json
+```
+
+### state.json
+
+Tracks roadmap fingerprints and synchronization timestamps.
+
+### roadmap_ids.json
+
+Provides stable ObjectIds for roadmaps across executions.
+
+---
+
+## raw-bucket
+
+Stores downloaded roadmap assets.
+
+```text
+roadmaps/
+├── backend/
+├── frontend/
+├── devops/
+└── ...
+```
+
+---
+
+## output-bucket
+
+Stores transformed artifacts.
+
+```text
+output/
+├── roadmaps.json
+└── topics.json
+```
+
+---
+
+# Scheduling
+
+The ETL pipeline executes automatically every 20 minutes.
+
+```yaml
+rate(20 minutes)
+```
+
+Execution Flow:
+
+```text
+EventBridge
+      ↓
+Step Functions
+      ↓
+Extract
+      ↓
+Transform
+      ↓
+Load
+```
+
+---
+
+# Observability
+
+The platform enables tracing and logging across all services.
+
+## CloudWatch Logs
+
+Dedicated log groups:
+
+```text
+NestJS Lambda
+
+Extract Lambda
+
+Transform Lambda
+
+Load Lambda
+
+Step Functions
+```
+
+## X-Ray Tracing
+
+Enabled for:
+
+* NestJS Lambda
+* Extract Lambda
+* Transform Lambda
+* Load Lambda
+* Step Functions
+
+---
+
+# Local Development
+
+The project is developed using LocalStack.
+
+Supported services:
+
+* Lambda
+* API Gateway
+* S3
+* Step Functions
+* EventBridge
+* CloudWatch Logs
+
+## Build
+
+```bash
+sam build
+```
+
+## Deploy
+
+```bash
+sam deploy
+```
+
+## Local API
+
+```text
+http://localhost:4566/_aws/execute-api/{api-id}/Prod/
+```
+
+---
+
+# Design Decisions
+
+## Why Step Functions?
+
+The ETL workflow consists of independent stages that require orchestration.
+
+Benefits:
+
+* explicit workflow definition
+* execution history
+* retries
+* tracing
+* operational visibility
+
+---
+
+## Why S3 Between Stages?
+
+Instead of passing large payloads through Step Functions:
+
+* Extract writes raw artifacts
+* Transform reads raw artifacts and writes normalized outputs
+* Load consumes outputs
+
+Benefits:
+
+* stage isolation
+* easier debugging
+* reduced payload sizes
+* artifact persistence
+
+---
+
+## Why MongoDB Atlas?
+
+MongoDB provides:
+
+* flexible document structure
+* efficient topic graph storage
+* straightforward upserts
+* managed cloud deployment
+
+---
+
+# Future Evolution
+
+The current architecture uses workflow orchestration through Step Functions.
+
+A future iteration may evolve into a fully event-driven architecture.
+
+```mermaid
+flowchart LR
+
+    GITHUB[(GitHub)]
+
+    EVENT[EventBridge]
+
+    EXQ[SQS Extract Queue]
+
+    TRQ[SQS Transform Queue]
+
+    LDQ[SQS Load Queue]
+
+    EX[Extract Workers]
+
+    TR[Transform Workers]
+
+    LD[Load Workers]
+
+    RAW[(Raw S3)]
+
+    OUT[(Output S3)]
+
+    DB[(MongoDB)]
+
+    GITHUB --> EVENT
+
+    EVENT --> EXQ
+
+    EXQ --> EX
+
+    EX --> RAW
+
+    RAW --> TRQ
+
+    TRQ --> TR
+
+    TR --> OUT
+
+    OUT --> LDQ
+
+    LDQ --> LD
+
+    LD --> DB
+```
+
+Benefits:
+
+* independent scaling
+* better fault isolation
+* parallel processing
+* reduced orchestration overhead
+* increased throughput
+
+---
+
+# Technology Stack
+
+## Backend
+
+* NestJS
+* TypeScript
+* AWS Lambda
+* API Gateway
+
+## ETL
+
+* Go
+* AWS Lambda
+* AWS Step Functions
+
+## Storage
+
+* Amazon S3
+* MongoDB Atlas
+
+## Infrastructure
+
+* AWS SAM
+* LocalStack
+* CloudWatch
+* X-Ray
+
+## Source Data
+
+* GitHub API
+* developer-roadmap repository
+
+---
+
+# Repository Structure
+
+```text
+.
+├── roadmap/              # NestJS Backend
+├── etl/                  # Go ETL Services
+├── stateMachine/         # Step Functions Definitions
+├── template.yaml         # AWS SAM Template
+└── README.md
+```
