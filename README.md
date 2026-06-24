@@ -121,7 +121,6 @@ flowchart TD
     G2[Detect Changed Roadmaps]
     G3[Download Changed Files]
 
-    STATE[(state-bucket)]
     RAW[(raw-bucket)]
 
     TRANSFORM[Transform Lambda]
@@ -141,17 +140,14 @@ flowchart TD
 
     DB[(MongoDB Atlas)]
 
-    START --> EXTRACT
 
     EXTRACT --> G1
     G1 --> G2
     G2 --> G3
 
-    G2 --> STATE
     G3 --> RAW
 
     RAW --> TRANSFORM
-    STATE --> TRANSFORM
 
     TRANSFORM --> T1
     T1 --> T2
