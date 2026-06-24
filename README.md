@@ -140,6 +140,7 @@ flowchart TD
 
     DB[(MongoDB Atlas)]
 
+    START --> EXTRACT
 
     EXTRACT --> G1
     G1 --> G2
