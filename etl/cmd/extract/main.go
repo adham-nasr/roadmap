@@ -20,7 +20,7 @@ type Response struct {
 
 func handler(ctx context.Context) (Response, error) {
 	// Env
-	stateBucket := os.Getenv("STATE_BUCKET")
+	// stateBucket := os.Getenv("STATE_BUCKET")
 	rawBucket := os.Getenv("RAW_BUCKET")
 	stateKey := os.Getenv("STATE_FILE_KEY") // e.g., "sync/state.json"
     _ = os.Getenv("IDS_FILE_KEY") // unused currently
@@ -31,7 +31,7 @@ func handler(ctx context.Context) (Response, error) {
 	githubToken := os.Getenv("GITHUB_TOKEN")
 	remoteBase := os.Getenv("GITHUB_ROADMAPS_PATH")
 
-	if stateBucket == "" || rawBucket == "" || stateKey == "" {
+	if rawBucket == "" || stateKey == "" {
 		log.Printf("ERROR: Missing required S3 environment variables") 
 		return Response{}, nil // Return error
 	}
@@ -71,7 +71,7 @@ func handler(ctx context.Context) (Response, error) {
 	}
 	// Adapters
 	log.Print("attempting to create adapters")
-	syncStore := s3.NewSyncStore(s3Client, stateBucket, stateKey)
+	syncStore := s3.NewSyncStore(s3Client, rawBucket, stateKey)
 	rawStore := s3.NewRawStore(s3Client, rawBucket, "roadmaps")
 
 	// GitHub Client

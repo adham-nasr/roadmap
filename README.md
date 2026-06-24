@@ -32,7 +32,6 @@ flowchart TD
         end
 
         subgraph STORAGE["Storage Layer"]
-            STATE[(state-bucket)]
             RAW[(raw-bucket)]
             OUTPUT[(output-bucket)]
         end
@@ -51,12 +50,10 @@ flowchart TD
 
     %% Extract dependencies
     EXTRACT --> GITHUB
-    EXTRACT --> STATE
     EXTRACT --> RAW
 
     %% Transform dependencies (reads from previous steps)
     RAW --> TRANSFORM
-    STATE --> TRANSFORM
 
     %% Load dependencies
     TRANSFORM --> OUTPUT

@@ -36,12 +36,7 @@ Resources:
       Handler: bootstrap
       CodeUri: etl/
       Timeout: 600
-      Policies:
-        - S3ReadPolicy:
-            BucketName: state-bucket
-        - S3WritePolicy:
-            BucketName: state-bucket
-            
+      Policies:            
         - S3ReadPolicy:
             BucketName: raw-bucket
         - S3WritePolicy:
@@ -50,7 +45,7 @@ Resources:
         Variables:
           # STATE_BUCKET: !Ref StateBucket
           # RAW_BUCKET: !Ref RawBucket
-          STATE_BUCKET: state-bucket
+          # STATE_BUCKET: state-bucket
           RAW_BUCKET: raw-bucket
           STATE_FILE_KEY: sync/state.json
           IDS_FILE_KEY: sync/roadmap_ids.json
@@ -85,14 +80,14 @@ Resources:
         - S3WritePolicy:
             BucketName: raw-bucket
 
-        # --- Second Bucket Permissions ---
-        - S3ReadPolicy:
-            BucketName: state-bucket
-        - S3WritePolicy:
-            BucketName: state-bucket
+        # # --- Second Bucket Permissions ---
+        # - S3ReadPolicy:
+        #     BucketName: state-bucket
+        # - S3WritePolicy:
+        #     BucketName: state-bucket
       Environment:
         Variables:
-          STATE_BUCKET: state-bucket
+          # STATE_BUCKET: state-bucket
           OUTPUT_BUCKET: output-bucket
           STATE_FILE_KEY: sync/state.json
           IDS_FILE_KEY: sync/roadmap_ids.json
@@ -161,11 +156,11 @@ Resources:
       Tracing:
         Enabled: true
 
-  StateBucket:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    Properties:
-      BucketName: state-bucket
+  # StateBucket:
+  #   Type: AWS::S3::Bucket
+  #   DeletionPolicy: Retain
+  #   Properties:
+  #     BucketName: state-bucket
 
   RawBucket:
     Type: AWS::S3::Bucket

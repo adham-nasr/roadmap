@@ -27,13 +27,13 @@ type OutputEvent struct {
 
 func handler(ctx context.Context, event InputEvent) (OutputEvent, error) {
 	// Env
-	stateBucket := os.Getenv("STATE_BUCKET")
+	// stateBucket := os.Getenv("STATE_BUCKET")
 	outputBucket := os.Getenv("OUTPUT_BUCKET")
 	stateIDsKey := os.Getenv("IDS_FILE_KEY") // e.g. "sync/roadmap_ids.json"
 	roadmapsOutputKey := os.Getenv("ROADMAPS_OUTPUT_KEY") // e.g. "output/roadmaps.json"
 	topicsOutputKey := os.Getenv("TOPICS_OUTPUT_KEY")     // e.g. "output/topics.json"
 
-	if stateBucket == "" || outputBucket == "" || stateIDsKey == "" {
+	if outputBucket == "" || stateIDsKey == "" {
 		log.Fatal("Missing required S3 env vars")
 	}
 
@@ -55,7 +55,7 @@ func handler(ctx context.Context, event InputEvent) (OutputEvent, error) {
 
 	// Instantiate adapters
 	reader := s3.NewS3RoadmapReader(s3Client, event.RawBucket, "roadmaps")
-	idStore := s3.NewS3IDStore(s3Client, stateBucket, stateIDsKey)
+	idStore := s3.NewS3IDStore(s3Client, event.RawBucket, stateIDsKey)
 	outputWriter := s3.NewS3OutputWriter(s3Client, outputBucket, roadmapsOutputKey, topicsOutputKey)
 
 	// Run transform
