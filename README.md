@@ -11,70 +11,58 @@ The project is developed locally using LocalStack while remaining fully compatib
 # Architecture Overview
 
 ```mermaid
-flowchart LR
-
+flowchart TD
     USER[Client Applications]
 
     subgraph AWS["AWS / LocalStack"]
-
         subgraph API["Application Layer"]
             APIGW[API Gateway]
-            NEST[NestJS Backend Lambda]
+            NEST[NestJS<br>Backend Lambda]
         end
 
         subgraph ORCH["Workflow Orchestration"]
-            SCHEDULE[EventBridge Schedule]
-            SFN[Step Functions ETL State Machine]
+            SCHEDULE[EventBridge<br>Schedule]
+            SFN[Step Functions<br>ETL State Machine]
         end
 
         subgraph ETL["ETL Services"]
-
             EXTRACT[Extract Lambda]
-
             TRANSFORM[Transform Lambda]
-
             LOAD[Load Lambda]
-
         end
 
         subgraph STORAGE["Storage Layer"]
-
             STATE[(state-bucket)]
-
             RAW[(raw-bucket)]
-
             OUTPUT[(output-bucket)]
-
         end
     end
 
-    GITHUB[(GitHub Repository)]
+    GITHUB[(GitHub<br>Repository)]
+    MONGO[(MongoDB<br>Atlas)]
 
-    MONGO[(MongoDB Atlas)]
-
-    USER --> APIGW
-    APIGW --> NEST
-
+    %% API Flow
+    USER --> APIGW --> NEST
     NEST --> MONGO
 
+    %% Orchestration Flow - FIXED to sequential chain
     SCHEDULE --> SFN
+    SFN --> EXTRACT --> TRANSFORM --> LOAD
 
-    SFN --> EXTRACT
-    SFN --> TRANSFORM
-    SFN --> LOAD
-
+    %% Extract dependencies
     EXTRACT --> GITHUB
-
     EXTRACT --> STATE
     EXTRACT --> RAW
 
+    %% Transform dependencies (reads from previous steps)
     RAW --> TRANSFORM
     STATE --> TRANSFORM
 
+    %% Load dependencies
     TRANSFORM --> OUTPUT
-
     OUTPUT --> LOAD
 
+    %% Final Load destination
     LOAD --> MONGO
 ```
 
