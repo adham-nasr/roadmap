@@ -55,6 +55,13 @@ func SyncRoadmaps(
 		return nil, err
 	}
 
+	log.Printf("found %d eligible roadmaps",len(eligible))
+
+	log.Printf("%+v",eligible)
+
+	log.Print("--------------------------")
+
+	return nil, nil
 	log.Print("determining changed vs skipped")
 	// 4. Determine changed vs skipped
 	var changed []RoadmapRemote

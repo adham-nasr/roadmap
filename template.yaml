@@ -27,25 +27,19 @@ Resources:
             Method: ANY
       Tracing: Active
 
+  #### FUNCTIONS :
 
-  ExtractFunction:
+
+  FetchFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: extractService
+      FunctionName: fetchService
       Runtime: provided.al2023
       Handler: bootstrap
       CodeUri: etl/
       Timeout: 600
-      Policies:            
-        - S3ReadPolicy:
-            BucketName: raw-bucket
-        - S3WritePolicy:
-            BucketName: raw-bucket
       Environment:
         Variables:
-          # STATE_BUCKET: !Ref StateBucket
-          # RAW_BUCKET: !Ref RawBucket
-          # STATE_BUCKET: state-bucket
           RAW_BUCKET: raw-bucket
           STATE_FILE_KEY: sync/state.json
           IDS_FILE_KEY: sync/roadmap_ids.json
@@ -53,11 +47,113 @@ Resources:
           GITHUB_REPO: developer-roadmap
           GITHUB_BRANCH: master
           GITHUB_ROADMAPS_PATH: src/data/roadmaps
-          GITHUB_TOKEN: ""
-      Tracing: Active    
-       
+          GITHUB_TOKEN: ''
+          SQS_QUEUE_URL: !Ref UrlsQueue
+          RUN_TABLE: !Ref RunTable
+          COMPLETED_TABLE: !Ref CompletedTable
+      Tracing: Active
+
+      Policies:
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt UrlsQueue.QueueName
+        - DynamoDBWritePolicy:
+            TableName: !Ref RunTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref RunTable
+        - DynamoDBWritePolicy:
+            TableName: !Ref CompletedTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref CompletedTable
+      Events:
+        MyTimer:
+          Type: Schedule
+          Properties:
+            Schedule: rate(20 minutes)
     Metadata:
-      BuildMethod: makefile   
+      BuildMethod: makefile
+
+  DownloadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: downloadService
+      Runtime: provided.al2023
+      Handler: bootstrap
+      CodeUri: etl/
+      Timeout: 600
+      Environment:
+        Variables:
+          RAW_BUCKET: raw-bucket
+          STATE_KEY_PREFIX: sync/
+          STATE_FILE_KEY: sync/state.json
+          IDS_FILE_KEY: sync/roadmap_ids.json
+          GITHUB_OWNER: nilbuild
+          GITHUB_REPO: developer-roadmap
+          GITHUB_BRANCH: master
+          GITHUB_ROADMAPS_PATH: src/data/roadmaps
+          GITHUB_TOKEN: ''
+          RUN_TABLE: !Ref RunTable
+          COMPLETED_TABLE: !Ref CompletedTable
+          EVENT_BUS_NAME: !Ref EtlEventBus
+      Tracing: Active
+
+      Policies:
+        - SQSPollerPolicy:
+            QueueName: !GetAtt UrlsQueue.QueueName
+        - DynamoDBWritePolicy:
+            TableName: !Ref SyncStateTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref SyncStateTable
+        - DynamoDBWritePolicy:
+            TableName: !Ref RunTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref RunTable
+        - DynamoDBWritePolicy:
+            TableName: !Ref CompletedTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref CompletedTable
+        - S3CrudPolicy:
+            BucketName: !Ref RawBucket
+        - EventBridgePutEventsPolicy:
+            EventBusName: !Ref EtlEventBus
+      Events:
+        SQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt UrlsQueue.Arn
+            BatchSize: 5
+    Metadata:
+      BuildMethod: makefile
+
+  # ExtractFunction:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     FunctionName: extractService
+  #     Runtime: provided.al2023
+  #     Handler: bootstrap
+  #     CodeUri: etl/
+  #     Timeout: 600
+  #     Policies:            
+  #       - S3ReadPolicy:
+  #           BucketName: raw-bucket
+  #       - S3WritePolicy:
+  #           BucketName: raw-bucket
+  #     Environment:
+  #       Variables:
+  #         # STATE_BUCKET: !Ref StateBucket
+  #         # RAW_BUCKET: !Ref RawBucket
+  #         # STATE_BUCKET: state-bucket
+  #         RAW_BUCKET: raw-bucket
+  #         STATE_FILE_KEY: sync/state.json
+  #         IDS_FILE_KEY: sync/roadmap_ids.json
+  #         GITHUB_OWNER: nilbuild
+  #         GITHUB_REPO: developer-roadmap
+  #         GITHUB_BRANCH: master
+  #         GITHUB_ROADMAPS_PATH: src/data/roadmaps
+  #         GITHUB_TOKEN: ""
+  #     Tracing: Active    
+
+  #   Metadata:
+  #     BuildMethod: makefile   
 
   TransformFunction:
     Type: AWS::Serverless::Function
@@ -73,18 +169,15 @@ Resources:
             BucketName: output-bucket
         - S3WritePolicy:
             BucketName: output-bucket
-            
+
         # --- Second Bucket Permissions ---
         - S3ReadPolicy:
             BucketName: raw-bucket
         - S3WritePolicy:
             BucketName: raw-bucket
+        - EventBridgePutEventsPolicy:
+            EventBusName: !Ref EtlEventBus
 
-        # # --- Second Bucket Permissions ---
-        # - S3ReadPolicy:
-        #     BucketName: state-bucket
-        # - S3WritePolicy:
-        #     BucketName: state-bucket
       Environment:
         Variables:
           # STATE_BUCKET: state-bucket
@@ -97,12 +190,12 @@ Resources:
           GITHUB_REPO: developer-roadmap
           GITHUB_BRANCH: master
           GITHUB_ROADMAPS_PATH: src/data/roadmaps
-          GITHUB_TOKEN: ""
+          GITHUB_TOKEN: ''
+          EVENT_BUS_NAME: !Ref EtlEventBus
       Tracing: Active
 
-       
     Metadata:
-      BuildMethod: makefile   
+      BuildMethod: makefile
 
   LoadFunction:
     Type: AWS::Serverless::Function
@@ -122,45 +215,98 @@ Resources:
           MONGODB_URI: mongodb+srv://adham2042000_db_user:jVe446ugr2gngmKS@cluster0.gho62ke.mongodb.net/?appName=Cluster0
           MONGODB_DB: roadmapsdb
       Tracing: Active
-      
-       
-    Metadata:
-      BuildMethod: makefile   
 
-  ETLStateMachine:
-    Type: AWS::Serverless::StateMachine
+    Metadata:
+      BuildMethod: makefile
+
+  ###### Orchestrators
+  ######
+
+  EtlEventBus:
+    Type: AWS::Events::EventBus
     Properties:
-      DefinitionUri: stateMachine/etl.json
-      DefinitionSubstitutions:
-        ExtractFunctionArn: !GetAtt ExtractFunction.Arn
-        TransformFunctionArn: !GetAtt TransformFunction.Arn
-        LoadFunctionArn: !GetAtt LoadFunction.Arn
-      Policies:
-        - LambdaInvokePolicy:
-            FunctionName: !Ref ExtractFunction
-        - LambdaInvokePolicy:
-            FunctionName: !Ref TransformFunction
-        - LambdaInvokePolicy:
-            FunctionName: !Ref LoadFunction
-      Events:
-        MyTimer:
-          Type: Schedule
-          Properties:
-            Schedule: "rate(20 minutes)" 
-      Logging:
-        Level: ALL
-        IncludeExecutionData: true
-        Destinations:
-          - CloudWatchLogsLogGroup:
-              LogGroupArn: !GetAtt ETLStateMachineLogGroup.Arn
-      Tracing:
-        Enabled: true
+      Name: etl-bus
+
+  TransformTriggerRule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventBusName: !Ref EtlEventBus
+      EventPattern:
+        source:
+          - etl.pipeline
+        detail-type:
+          - RunComplete
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt TransformFunction.Arn
+          Id: TransformFunction
+  LoadTriggerRule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventBusName: !Ref EtlEventBus
+      EventPattern:
+        source:
+          - etl.pipeline
+        detail-type:
+          - TransformComplete
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt LoadFunction.Arn
+          Id: LoadFunction
+
+  InvokeTranformLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref TransformFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt TransformTriggerRule.Arn
+
+  InvokeLoadLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LoadFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt LoadTriggerRule.Arn
+  # ETLStateMachine:
+  #   Type: AWS::Serverless::StateMachine
+  #   Properties:
+  #     DefinitionUri: stateMachine/etl.json
+  #     DefinitionSubstitutions:
+  #       ExtractFunctionArn: !GetAtt ExtractFunction.Arn
+  #       TransformFunctionArn: !GetAtt TransformFunction.Arn
+  #       LoadFunctionArn: !GetAtt LoadFunction.Arn
+  #     Policies:
+  #       - LambdaInvokePolicy:
+  #           FunctionName: !Ref ExtractFunction
+  #       - LambdaInvokePolicy:
+  #           FunctionName: !Ref TransformFunction
+  #       - LambdaInvokePolicy:
+  #           FunctionName: !Ref LoadFunction
+  #     # Events:
+  #     #   MyTimer:
+  #     #     Type: Schedule
+  #     #     Properties:
+  #     #       Schedule: "rate(20 minutes)" 
+  #     Logging:
+  #       Level: ALL
+  #       IncludeExecutionData: true
+  #       Destinations:
+  #         - CloudWatchLogsLogGroup:
+  #             LogGroupArn: !GetAtt ETLStateMachineLogGroup.Arn
+  #     Tracing:
+  #       Enabled: true
 
   # StateBucket:
   #   Type: AWS::S3::Bucket
   #   DeletionPolicy: Retain
   #   Properties:
   #     BucketName: state-bucket
+
+
+  ######### Storage
+  #########
 
   RawBucket:
     Type: AWS::S3::Bucket
@@ -174,37 +320,93 @@ Resources:
     Properties:
       BucketName: output-bucket
 
+  UrlsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: urlsQueue
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt UrlsDLQ.Arn
+        maxReceiveCount: 3
+
+  UrlsDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: urlsDLQ
+
+  RunTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: PipelineRun
+      AttributeDefinitions:
+        - AttributeName: runId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: runId
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  CompletedTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: CompletedRoadmaps
+      AttributeDefinitions:
+        - AttributeName: runId
+          AttributeType: S
+        - AttributeName: roadmapName
+          AttributeType: S
+      KeySchema:
+        - AttributeName: runId
+          KeyType: HASH
+        - AttributeName: roadmapName
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+  SyncStateTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: SyncState
+      AttributeDefinitions:
+        - AttributeName: roadmapName
+          AttributeType: S
+      KeySchema:
+        - AttributeName: roadmapName
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  ######## LOGGING :
+  ########
+
+
   ETLStateMachineLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       RetentionInDays: 30
-  
+
   NestLambdaLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub "/aws/lambda/${NestLambdalith}"
+      LogGroupName: !Sub /aws/lambda/${NestLambdalith}
       RetentionInDays: 30
 
-  ExtractFunctionLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub "/aws/lambda/${ExtractFunction}"
-      RetentionInDays: 30
+  # ExtractFunctionLogGroup:
+  #   Type: AWS::Logs::LogGroup
+  #   Properties:
+  #     LogGroupName: !Sub "/aws/lambda/${ExtractFunction}"
+  #     RetentionInDays: 30
 
   TransformFunctionLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub "/aws/lambda/${TransformFunction}"
+      LogGroupName: !Sub /aws/lambda/${TransformFunction}
       RetentionInDays: 30
 
   LoadFunctionLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub "/aws/lambda/${LoadFunction}"
+      LogGroupName: !Sub /aws/lambda/${LoadFunction}
       RetentionInDays: 30
 
 Outputs:
   ApiUrl:
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+    Value: !Sub https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/
   LocalApiUrl:
-    Value: !Sub "http://localhost:4566/_aws/execute-api/${ServerlessRestApi}/Prod/"
+    Value: !Sub http://localhost:4566/_aws/execute-api/${ServerlessRestApi}/Prod/

@@ -2,38 +2,43 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"os"
 
 	"ETL/internal/load"
 	"ETL/internal/storage/s3"
 
+	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-// InputEvent is the payload from the Step Functions (or direct invocation).
-type InputEvent struct {
-	OutputBucket string `json:"outputBucket"`
-	RoadmapsKey  string `json:"roadmapsKey"`
-	TopicsKey    string `json:"topicsKey"`
-}
-
 type OutputEvent struct {
 	Status string `json:"status"`
 }
 
-func handler(ctx context.Context, event InputEvent) (OutputEvent, error) {
-	// Env vars
+func handler(ctx context.Context, event events.EventBridgeEvent) (OutputEvent, error) {
+	// Parse detail
+	var detail struct {
+		OutputBucket string `json:"outputBucket"`
+		RoadmapsKey  string `json:"roadmapsKey"`
+		TopicsKey    string `json:"topicsKey"`
+	}
+	if err := json.Unmarshal(event.Detail, &detail); err != nil {
+		log.Printf("Failed to parse event detail: %v", err)
+		return OutputEvent{}, err
+	}
+	log.Printf("Received TransformComplete event: outputBucket=%s, roadmapsKey=%s", detail.OutputBucket, detail.RoadmapsKey)
+
 	mongoURI := os.Getenv("MONGODB_URI")
 	mongoDBName := os.Getenv("MONGODB_DB")
 	if mongoURI == "" || mongoDBName == "" {
 		log.Fatal("Missing MongoDB environment variables")
 	}
 
-	// S3 client
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		return OutputEvent{}, err
@@ -48,10 +53,9 @@ func handler(ctx context.Context, event InputEvent) (OutputEvent, error) {
 	} else {
 		s3Client = awss3.NewFromConfig(cfg)
 	}
-	log.Printf("INFO: received event %+v", event)	// Adapter
-	reader := s3.NewS3OutputReader(s3Client, event.OutputBucket, event.RoadmapsKey, event.TopicsKey)
 
-	// Run load
+	reader := s3.NewS3OutputReader(s3Client, detail.OutputBucket, detail.RoadmapsKey, detail.TopicsKey)
+
 	if err := load.LoadFromOutput(ctx, reader, mongoURI, mongoDBName); err != nil {
 		return OutputEvent{}, err
 	}
