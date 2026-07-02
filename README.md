@@ -1,609 +1,238 @@
 # Roadmaps Platform
 
-A serverless platform for synchronizing, transforming, and serving developer roadmap data.
+> Serverless, event-driven ETL platform built with AWS SAM, Go, NestJS
+> and LocalStack.
 
-The system continuously extracts roadmap definitions from GitHub, transforms them into a normalized domain model, loads them into MongoDB Atlas, and exposes the resulting data through a NestJS API deployed as a Lambda function.
+## Overview
 
-The project is developed locally using LocalStack while remaining fully compatible with AWS deployment.
+This project consists of two major subsystems:
 
----
+-   **NestJS Backend** deployed as a Lambda behind API Gateway.
+-   **Event-driven ETL Pipeline** that synchronizes roadmap definitions
+    from GitHub, transforms them into a normalized model, and loads them
+    into MongoDB Atlas.
 
-# Architecture Overview
+The platform is developed against **LocalStack** while remaining
+compatible with AWS.
 
-```mermaid
-flowchart TD
-    USER[Client Applications]
+------------------------------------------------------------------------
 
-    subgraph AWS["AWS / LocalStack"]
-        subgraph API["Application Layer"]
-            APIGW[API Gateway]
-            NEST[NestJS<br>Backend Lambda]
-        end
+# High-Level Architecture
 
-        subgraph ORCH["Workflow Orchestration"]
-            SCHEDULE[EventBridge<br>Schedule]
-            SFN[Step Functions<br>ETL State Machine]
-        end
+``` mermaid
+flowchart TB
+    %% Force 3-column layout: Backend | ETL | Storage
+    Backend ~~~ ETL ~~~ Storage
 
-        subgraph ETL["ETL Services"]
-            EXTRACT[Extract Lambda]
-            TRANSFORM[Transform Lambda]
-            LOAD[Load Lambda]
-        end
-
-        subgraph STORAGE["Storage Layer"]
-            RAW[(raw-bucket)]
-            OUTPUT[(output-bucket)]
-        end
+    %% =============================================
+    %% COLUMN 1: BACKEND
+    %% =============================================
+    subgraph Backend["Backend System"]
+        direction TB
+        APIGW[API Gateway]
+        Nest[NestJS Lambda]
+        APIGW --> Nest
     end
 
-    GITHUB[(GitHub<br>Repository)]
-    MONGO[(MongoDB<br>Atlas)]
+    Client([Client Apps]) --> APIGW
 
-    %% API Flow
-    USER --> APIGW --> NEST
-    NEST --> MONGO
+    %% =============================================
+    %% COLUMN 2: ETL + LONG BUS
+    %% =============================================
+    subgraph ETL["Event-Driven ETL Pipeline"]
+        direction LR
 
-    %% Orchestration Flow - FIXED to sequential chain
-    SCHEDULE --> SFN
-    SFN --> EXTRACT --> TRANSFORM --> LOAD
+        subgraph Pipeline[" "]
+            direction TB
+            Scheduler[⏱️ EventBridge Scheduler]
+            Fetch[📥 Fetch Lambda]
+            Queue[📨 SQS Queue]
+            
+            subgraph Workers["Parallel Download Workers"]
+                direction LR
+                D1[Worker 1] ~~~ D2[Worker 2] ~~~ D3[Worker 3]
+            end
+            
+            Transform[🔄 Transform Lambda]
+            Load[💾 Load Lambda]
 
-    %% Extract dependencies
-    EXTRACT --> GITHUB
-    EXTRACT --> RAW
+            %% Explicit edges = perfect vertical stacking
+            Scheduler --> Fetch --> Queue --> Workers
+            Workers --> Transform
+            Transform --> Load
+        end
 
-    %% Transform dependencies (reads from previous steps)
-    RAW --> TRANSFORM
+        %% The Long Bus - tall vertical orchestrator
+        subgraph Bus["📡 EventBridge Bus"]
+            direction TB
+            B1[ ] ~~~ B2[ ] ~~~ B3[ ] ~~~ B4[ ]
+        end
 
-    %% Load dependencies
-    TRANSFORM --> OUTPUT
-    OUTPUT --> LOAD
+        %% Event handoffs with real event names
+        Workers -.->|downloadComplete| Bus
+        Bus -->|transformTrigger| Transform
+        Transform -.->|transformComplete| Bus
+        Bus -->|loadTrigger| Load
+    end
 
-    %% Final Load destination
-    LOAD --> MONGO
+    %% =============================================
+    %% COLUMN 3: STORAGE
+    %% =============================================
+    subgraph Storage["Storage Layer"]
+        direction TB
+        Raw[(raw-bucket)]
+        Output[(output-bucket)]
+        DynamoDB[(DynamoDB Tables)]
+        Raw ~~~ Output ~~~ DynamoDB
+    end
+
+    %% =============================================
+    %% MINIMAL DATA FLOWS (Essential only)
+    %% =============================================
+    GitHub[(GitHub Repository)] -->|gets roadmap list| Fetch
+    Fetch -->|enqueues URLs| Queue
+    Fetch -->|creates run| DynamoDB
+    Workers -->|store raw files| Raw
+    Transform -->|write output| Output
+    Load -->|loads| Mongo[(MongoDB Atlas)]
+
+    %% =============================================
+    %% STYLING
+    %% =============================================
+    classDef external fill:#FFEBEE,stroke:#C62828,stroke-width:2px,color:#000
+    classDef backend fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#000
+    classDef compute fill:#F3E5F5,stroke:#6A1B9A,stroke-width:2px,color:#000
+    classDef storage fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#000
+    classDef trigger fill:#FFF3E0,stroke:#E65100,stroke-width:2px,color:#000
+    classDef invisible fill:none,stroke:none,color:#fff
+
+    class Client,GitHub,Mongo external
+    class APIGW,Nest backend
+    class Scheduler,Queue,Bus trigger
+    class Fetch,Transform,Load,D1,D2,D3 compute
+    class Raw,Output,DynamoDB storage
+    class B1,B2,B3,B4 invisible
 ```
 
----
+# Components
 
-# System Components
+## Fetch Lambda
 
-## NestJS Backend
+-   Scans GitHub repository
+-   Detects changed roadmaps
+-   Creates pipeline run
+-   Enqueues download jobs in SQS
 
-The API layer is implemented as a NestJS application deployed as a Lambda function.
+## Download Lambda
 
-Responsibilities:
+-   Triggered by SQS
+-   Downloads roadmap assets
+-   Stores raw content in S3
+-   Updates DynamoDB state
+-   Emits **RunComplete** on the EventBridge bus
 
-* Expose REST APIs
-* Serve roadmap data
-* Query MongoDB Atlas
-* Provide application-facing endpoints
+## Transform Lambda
 
-### Runtime
+-   Reads raw artifacts
+-   Parses and normalizes roadmap data
+-   Produces `roadmaps.json` and `topics.json`
+-   Emits **TransformComplete**
 
-```text
-API Gateway
-     ↓
-NestJS Lambda
-     ↓
-MongoDB Atlas
-```
+## Load Lambda
 
----
+-   Reads generated artifacts
+-   Upserts MongoDB Atlas collections
 
-## ETL Pipeline
+# AWS Resources
 
-The ETL pipeline is responsible for synchronizing roadmap definitions from GitHub and maintaining the MongoDB dataset used by the API.
+  Service         Purpose
+  --------------- -----------------------------
+  API Gateway     Backend entrypoint
+  Lambda          Compute
+  EventBridge     Event routing
+  SQS             Download work queue
+  S3              Raw & transformed artifacts
+  DynamoDB        Pipeline state
+  MongoDB Atlas   Application database
+  CloudWatch      Logging
 
-The workflow is orchestrated by AWS Step Functions.
+# DynamoDB Tables
 
-### Stages
+  Table               Purpose
+  ------------------- -------------------------------------
+  SyncState           Roadmap fingerprint synchronization
+  PipelineRun         Current ETL execution
+  CompletedRoadmaps   Completed downloads for a run
 
-```text
-Extract
-   ↓
+# S3 Buckets
+
+  Bucket          Contents
+  --------------- -----------------------------------------
+  raw-bucket      Downloaded roadmap assets
+  output-bucket   Generated roadmaps.json and topics.json
+
+# Event Flow
+
+``` text
+Scheduler
+   │
+Fetch
+   │
+SQS
+   │
+Download Workers
+   │
+EventBridge (RunComplete)
+   │
 Transform
-   ↓
+   │
+EventBridge (TransformComplete)
+   │
 Load
+   │
+MongoDB
 ```
-
----
-
-# ETL Workflow
-
-```mermaid
-flowchart TD
-
-    START([Scheduled Execution])
-
-    EXTRACT[Extract Lambda]
-
-    G1[Fetch GitHub Tree]
-    G2[Detect Changed Roadmaps]
-    G3[Download Changed Files]
-
-    RAW[(raw-bucket)]
-
-    TRANSFORM[Transform Lambda]
-
-    T1[Load Raw Roadmaps]
-    T2[Parse Topics]
-    T3[Build Relationships]
-    T4[Generate Outputs]
-
-    OUTPUT[(output-bucket)]
-
-    LOAD[Load Lambda]
-
-    M1[Ensure Indexes]
-    M2[Upsert Roadmaps]
-    M3[Upsert Topics]
-
-    DB[(MongoDB Atlas)]
-
-    START --> EXTRACT
-
-    EXTRACT --> G1
-    G1 --> G2
-    G2 --> G3
-
-    G3 --> RAW
-
-    RAW --> TRANSFORM
-
-    TRANSFORM --> T1
-    T1 --> T2
-    T2 --> T3
-    T3 --> T4
-
-    T4 --> OUTPUT
-
-    OUTPUT --> LOAD
-
-    LOAD --> M1
-    M1 --> M2
-    M2 --> M3
-
-    M3 --> DB
-```
-
----
-
-# State Machine
-
-The ETL process is orchestrated using AWS Step Functions.
-
-```mermaid
-stateDiagram-v2
-
-    [*] --> Extract
-
-    Extract --> Transform
-
-    Transform --> Load
-
-    Load --> [*]
-```
-
-Current retry strategy:
-
-```yaml
-Retry:
-  ErrorEquals:
-    - States.ALL
-  IntervalSeconds: 10
-  MaxAttempts: 2
-  BackoffRate: 2
-```
-
----
-
-# Extract Service
-
-The Extract service synchronizes roadmap content from GitHub.
-
-## Responsibilities
-
-* Fetch repository tree
-* Discover eligible roadmaps
-* Detect roadmap changes using fingerprints
-* Download changed roadmap assets
-* Persist synchronization state
-
-## Inputs
-
-```text
-GitHub Repository
-```
-
-## Outputs
-
-```text
-state-bucket
-raw-bucket
-```
-
-## Stored State
-
-```json
-{
-  "roadmaps": {
-    "backend": {
-      "fingerprint": "...",
-      "syncedAt": "..."
-    }
-  }
-}
-```
-
-## Change Detection
-
-Each roadmap is fingerprinted using:
-
-```text
-SHA256(
-    file_path + file_sha
-)
-```
-
-Only changed roadmaps are downloaded.
-
----
-
-# Transform Service
-
-The Transform service converts raw roadmap assets into a normalized domain model.
-
-## Responsibilities
-
-* Read roadmap definitions
-* Parse topic markdown files
-* Extract resources
-* Build topic relationships
-* Generate output artifacts
-
-## Inputs
-
-```text
-raw-bucket
-state-bucket
-```
-
-## Outputs
-
-```text
-output-bucket
-```
-
-### Generated Files
-
-```text
-output/
-├── roadmaps.json
-└── topics.json
-```
-
----
-
-# Load Service
-
-The Load service persists transformed data into MongoDB Atlas.
-
-## Responsibilities
-
-* Read transformed outputs
-* Ensure indexes
-* Upsert roadmaps
-* Upsert topics
-
-## Collections
-
-### roadmaps
-
-```json
-{
-  "_id": "...",
-  "name": "backend"
-}
-```
-
-### topics
-
-```json
-{
-  "topicId": "...",
-  "roadmapId": "...",
-  "name": "...",
-  "resources": [],
-  "childTopics": []
-}
-```
-
----
-
-# Storage Architecture
-
-## state-bucket
-
-Stores synchronization metadata.
-
-```text
-sync/
-├── state.json
-└── roadmap_ids.json
-```
-
-### state.json
-
-Tracks roadmap fingerprints and synchronization timestamps.
-
-### roadmap_ids.json
-
-Provides stable ObjectIds for roadmaps across executions.
-
----
-
-## raw-bucket
-
-Stores downloaded roadmap assets.
-
-```text
-roadmaps/
-├── backend/
-├── frontend/
-├── devops/
-└── ...
-```
-
----
-
-## output-bucket
-
-Stores transformed artifacts.
-
-```text
-output/
-├── roadmaps.json
-└── topics.json
-```
-
----
-
-# Scheduling
-
-The ETL pipeline executes automatically every 20 minutes.
-
-```yaml
-rate(20 minutes)
-```
-
-Execution Flow:
-
-```text
-EventBridge
-      ↓
-Step Functions
-      ↓
-Extract
-      ↓
-Transform
-      ↓
-Load
-```
-
----
-
-# Observability
-
-The platform enables tracing and logging across all services.
-
-## CloudWatch Logs
-
-Dedicated log groups:
-
-```text
-NestJS Lambda
-
-Extract Lambda
-
-Transform Lambda
-
-Load Lambda
-
-Step Functions
-```
-
-## X-Ray Tracing
-
-Enabled for:
-
-* NestJS Lambda
-* Extract Lambda
-* Transform Lambda
-* Load Lambda
-* Step Functions
-
----
 
 # Local Development
 
-The project is developed using LocalStack.
-
-Supported services:
-
-* Lambda
-* API Gateway
-* S3
-* Step Functions
-* EventBridge
-* CloudWatch Logs
-
-## Build
-
-```bash
+``` bash
 sam build
-```
-
-## Deploy
-
-```bash
 sam deploy
 ```
 
-## Local API
+Local endpoint:
 
-```text
-http://localhost:4566/_aws/execute-api/{api-id}/Prod/
+    http://localhost:4566/_aws/execute-api/<api-id>/Prod/
+
+# Repository Layout
+
+``` text
+roadmap/          NestJS API
+etl/              Go Lambdas
+stateMachine/     Legacy workflow definitions
+template.yaml     AWS SAM infrastructure
+README.md
 ```
 
----
+# Future Improvements
 
-# Design Decisions
-
-## Why Step Functions?
-
-The ETL workflow consists of independent stages that require orchestration.
-
-Benefits:
-
-* explicit workflow definition
-* execution history
-* retries
-* tracing
-* operational visibility
-
----
-
-## Why S3 Between Stages?
-
-Instead of passing large payloads through Step Functions:
-
-* Extract writes raw artifacts
-* Transform reads raw artifacts and writes normalized outputs
-* Load consumes outputs
-
-Benefits:
-
-* stage isolation
-* easier debugging
-* reduced payload sizes
-* artifact persistence
-
----
-
-## Why MongoDB Atlas?
-
-MongoDB provides:
-
-* flexible document structure
-* efficient topic graph storage
-* straightforward upserts
-* managed cloud deployment
-
----
-
-# Future Evolution
-
-The current architecture uses workflow orchestration through Step Functions.
-
-A future iteration may evolve into a fully event-driven architecture.
-
-```mermaid
-flowchart LR
-
-    GITHUB[(GitHub)]
-
-    EVENT[EventBridge]
-
-    EXQ[SQS Extract Queue]
-
-    TRQ[SQS Transform Queue]
-
-    LDQ[SQS Load Queue]
-
-    EX[Extract Workers]
-
-    TR[Transform Workers]
-
-    LD[Load Workers]
-
-    RAW[(Raw S3)]
-
-    OUT[(Output S3)]
-
-    DB[(MongoDB)]
-
-    GITHUB --> EVENT
-
-    EVENT --> EXQ
-
-    EXQ --> EX
-
-    EX --> RAW
-
-    RAW --> TRQ
-
-    TRQ --> TR
-
-    TR --> OUT
-
-    OUT --> LDQ
-
-    LDQ --> LD
-
-    LD --> DB
-```
-
-Benefits:
-
-* independent scaling
-* better fault isolation
-* parallel processing
-* reduced orchestration overhead
-* increased throughput
-
----
+-   Parallel transform workers
+-   Event versioning
+-   CloudWatch dashboards
+-   OpenTelemetry
+-   CI/CD deployment
+-   Infrastructure tests
 
 # Technology Stack
 
-## Backend
-
-* NestJS
-* TypeScript
-* AWS Lambda
-* API Gateway
-
-## ETL
-
-* Go
-* AWS Lambda
-* AWS Step Functions
-
-## Storage
-
-* Amazon S3
-* MongoDB Atlas
-
-## Infrastructure
-
-* AWS SAM
-* LocalStack
-* CloudWatch
-* X-Ray
-
-## Source Data
-
-* GitHub API
-* developer-roadmap repository
-
----
-
-# Repository Structure
-
-```text
-.
-├── roadmap/              # NestJS Backend
-├── etl/                  # Go ETL Services
-├── stateMachine/         # Step Functions Definitions
-├── template.yaml         # AWS SAM Template
-└── README.md
-```
+-   Go
+-   NestJS
+-   AWS SAM
+-   AWS Lambda
+-   API Gateway
+-   EventBridge
+-   Amazon SQS
+-   Amazon S3
+-   DynamoDB
+-   MongoDB Atlas
+-   LocalStack
